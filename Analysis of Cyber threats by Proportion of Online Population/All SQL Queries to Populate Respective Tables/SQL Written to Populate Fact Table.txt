@@ -1,0 +1,26 @@
+SELECT A.*, B.Categories, B.COUNT, (
+CASE
+WHEN ROW_NUMBER() OVER (PARTITION BY A.COUNTRY ORDER BY A.COUNTRY) = 1 THEN C.INTERNET_USERS_MILLION ELSE 0 END
+) INTERNET_USERS_MILLION,
+(CASE 
+WHEN
+A.COUNTRY IN (SELECT DISTINCT Lowest_Rate_of_Malware_Infection FROM STG_OTHERMETRICS) THEN 'Y' ELSE 'N' END) Lowest_Rate_of_Malware_Infection,
+(CASE 
+WHEN
+A.COUNTRY IN (SELECT DISTINCT Highest_Rate_of_Malware_Infection FROM STG_OTHERMETRICS) THEN 'Y' ELSE 'N' END) Highest_Rate_of_Malware_Infection,
+(CASE 
+WHEN
+A.COUNTRY IN (SELECT DISTINCT Highest_Number_of_Users_attacked_with_Ransomware FROM STG_OTHERMETRICS) THEN 'Y' ELSE 'N' END) Highest_Number_of_Users_attacked_with_Ransomware,
+(CASE 
+WHEN
+A.COUNTRY IN (SELECT DISTINCT Highest_percentage_of_DDoS_attacks FROM STG_OTHERMETRICS) THEN 'Y' ELSE 'N' END) Highest_percentage_of_DDoS_attacks,
+(CASE 
+WHEN
+A.COUNTRY IN (SELECT DISTINCT Least_Amount_of_Freedom_on_net FROM STG_OTHERMETRICS) THEN 'Y' ELSE 'N' END) Least_Amount_of_Freedom_on_net,
+(CASE 
+WHEN
+A.COUNTRY IN (SELECT DISTINCT Highest_Amount_of_Freedom_on_net FROM STG_OTHERMETRICS) THEN 'Y' ELSE 'N' END) Highest_Amount_of_Freedom_on_net,
+(CASE 
+WHEN
+A.COUNTRY IN (SELECT DISTINCT Most_Vulnerable_Countries_to_Hacking FROM STG_OTHERMETRICS) THEN 'Y' ELSE 'N' END) Most_Vulnerable_Countries_to_Hacking
+FROM STG_MALICIOUSIP A INNER JOIN STG_CATEGORYCOUNT B ON A.IP = B.IP INNER JOIN STG_INTERNETUSERS C ON A.COUNTRY = C.Country

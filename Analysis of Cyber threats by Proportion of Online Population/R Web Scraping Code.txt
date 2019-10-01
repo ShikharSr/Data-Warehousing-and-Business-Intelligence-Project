@@ -1,0 +1,235 @@
+R Web Scraping Code -----
+
+#----------------------------------------------Libraries-----------------------------------------------------------
+library(tidyverse)
+library(rvest)
+library(stringr)
+library(htmltab)
+
+#-----------------------------------------------Main URL-----------------------------------------------------------
+
+url <- 'https://www.abuseipdb.com/sitemap'
+
+#--------------------Functions to fetch Malicious IPs and their urls(to get more details)--------------------------
+
+IP_function <- function(html){
+  
+  IP <- html %>% html_nodes('.col-md-2 a') %>% html_attr("href") %>% str_trim() %>% unlist()
+  
+  trimws(IP) %>% str_replace_all("\\n", "")
+  
+  a <- IP[str_length(IP) <= 47]
+  
+}
+
+url_data <- function(url){
+  
+  html <- read_html(url)
+  
+  IP_function(html)
+}
+
+#------------------------------------Functions to fetch Data for each IP------------------------------------------
+
+table_url_data <- function(ip_link){
+  
+  html <- read_html(ip_link)
+  
+  table <- table_function(html)
+  
+  IP <- substr(ip_link,33,str_length(ip_link))
+  
+  a <- as.tibble(cbind(IP, table))
+  #tibble(IP=IP, table)
+}
+
+table_function <- function(html){
+  
+  table <- html %>%
+    
+    html_nodes(xpath='//*[@id="report-wrapper"]/div[1]/div[1]/div/table') %>%
+    
+    html_table() %>% as.data.frame()
+  
+  table <- t(table)
+  
+  table <- as.data.frame(table)
+  
+  colnames(table) <- as.character(unlist(table[1,]))
+  
+  table <- table[-1,]
+  
+  if (ncol(table) == 6) {
+    table <- table[,-3]
+  }
+  
+  table <- as.tibble(table)
+}
+
+#----------------------------------Functions to fetch Number of Times Reported------------------------------------
+
+reported_url_data <- function(url){
+  
+  html <- read_html(url)
+  
+  reported <- reported_function(html)
+  
+  IP <- substr(url,33,str_length(url))
+  
+  tibble(IP=IP, Reported=reported)
+}
+
+reported_function <- function(html){
+  
+  reported <- html %>% 
+    
+    html_nodes('#report+ p b:nth-child(1)') %>%
+    
+    html_text() %>%
+    
+    str_trim() %>%
+    
+    unlist()
+  
+  if_else(is.na(reported), '0', reported)
+}
+
+#-----------------------------------Functions to fetch First Reported Date----------------------------------------
+
+firstreported_url_data <- function(url){
+  
+  html <- read_html(url)
+  
+  firstreported <- firstreported_function(html)
+  
+  IP <- substr(url,33,str_length(url))
+  
+  firstreported <- substr(firstreported,1, 10)
+  
+  tibble(IP=IP, FirstReported=firstreported)
+}
+
+firstreported_function <- function(html){
+  
+  firstreported <- html %>% 
+    
+    html_nodes('b+ time') %>%
+    
+    html_attr("datetime") %>%
+    
+    str_trim() %>%
+    
+    unlist()
+  
+  #if_else(is.na(firstreported), "Not Found", firstreported)
+  
+}
+
+#--------------------------------------Functions for Last Reported Date--------------------------------------------
+
+lastreported_url_data <- function(url){
+  
+  html <- read_html(url)
+  
+  lastreported <- lastreported_function(html)
+  
+  IP <- substr(url,33,str_length(url))
+  
+  lastreported <- substr(lastreported,1, 10)
+  
+  tibble(IP=IP, Lastreported=lastreported)
+}
+
+lastreported_function <- function(html){
+  
+  lastreported <- html %>% 
+    
+    html_nodes('b time') %>%
+    
+    html_attr("datetime") %>%
+    
+    str_trim() %>%
+    
+    unlist()
+  
+  #if_else(is.na(lastreported), "Not Found", lastreported)
+}
+
+#----------------------------------------------------------Comment Category URL Data--------------------------------------------------------------------
+
+commentcategory_url_data <- function(url){
+  
+  commentcategory <- htmltab(doc=url, which=2)
+  
+  commentcategory <- commentcategory %>% group_by(Categories) %>% summarize(n())
+  
+  IP <- substr(url,33,str_length(url))
+  
+  commentcategory_IP <- cbind(IP, commentcategory)
+  
+  as.tibble(commentcategory_IP)
+}
+
+#--------------------------------Main function which calls all other functions------------------------------------
+
+data_table <- function(url, i){
+  
+  all_ips <- lapply(str_c(url,"?page=",1:i),
+                    
+                    function(url){
+                      
+                      all_ips <- url %>% url_data()
+                    })
+  
+  ip_link <- unlist(all_ips)
+  
+  ip_link <- ip_link[1:1]
+  
+  for (i in ip_link) {
+    
+    table_data <- ip_link %>% map(table_url_data) %>% bind_rows()
+    
+    REPORTED <- ip_link %>% map(reported_url_data) %>% bind_rows()
+    
+    FIRSTREPORTED <- ip_link %>% map(firstreported_url_data) %>% bind_rows()
+    
+    LASTREPORTED <- ip_link %>% map(lastreported_url_data) %>% bind_rows()
+    
+    commentcategory <- ip_link %>% map(commentcategory_url_data) %>% bind_rows()
+    
+  }
+  
+  ISP_USAGE_DOMAIN_COUNTRY_CITY_REPORTED <- merge(table_data, REPORTED)
+  
+  ISP_USAGE_DOMAIN_COUNTRY_CITY_REPORTED_FIRSTREPORTED <- merge(ISP_USAGE_DOMAIN_COUNTRY_CITY_REPORTED, FIRSTREPORTED)
+  
+  ISP_USAGE_DOMAIN_COUNTRY_CITY_REPORTED_FIRSTREPORTED_LASTREPORTED <- merge(ISP_USAGE_DOMAIN_COUNTRY_CITY_REPORTED_FIRSTREPORTED, LASTREPORTED)
+  
+  write.csv(ISP_USAGE_DOMAIN_COUNTRY_CITY_REPORTED_FIRSTREPORTED_LASTREPORTED, "Malicious IP Details.csv", row.names = F)
+  
+  write.csv(commentcategory, "Category Wise Count.csv", row.names = F)
+  
+}
+
+#-----------------------------------------Calling Main Function---------------------------------------------------
+
+data_table(url,1)
+
+########################################################################################
+########################################################################################
+########################################################################################
+########################################################################################
+
+Categories ------
+
+library(htmltab)
+library(stringr)
+library(dplyr)
+
+url <- 'https://www.abuseipdb.com/categories'
+
+category <- htmltab(doc = url, which = 1)
+
+category$Description[is.na(category$Description)] <- "NoDescription"
+
+write.csv(category, "Category.csv", row.names = F)
